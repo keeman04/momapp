@@ -1,4 +1,4 @@
-name: Build TANU Premium APK
+name: Build TANU 1.3 Reliable APK
 
 on:
   push:
@@ -42,6 +42,19 @@ jobs:
           bash /tmp/premium_patch.sh
           sed -i "s/versionCode 1/versionCode 12/; s/versionName '1.0'/versionName '1.2'/" app/build.gradle
 
+      - name: Apply TANU 1.3 retention and screen-off recording
+        run: |
+          cat ci/tanu13_patch.b64.* > /tmp/tanu13_patch.gz.b64
+          echo "6b72bdb72e7a05f00a07f9e51a959af2d88c4a2ad93fb48deef0901f63ceba43  /tmp/tanu13_patch.gz.b64" | sha256sum -c -
+          base64 -d /tmp/tanu13_patch.gz.b64 | gzip -d > /tmp/tanu13_apply.sh
+          echo "f6d1811546dd68f896b19ba9638c36a322a6b79c78b10bdee02697bdc4bd2027  /tmp/tanu13_apply.sh" | sha256sum -c -
+          bash /tmp/tanu13_apply.sh
+          sed -i "s/versionCode 3/versionCode 13/" app/build.gradle
+          grep -q 'foregroundServiceType="microphone"' app/src/main/AndroidManifest.xml
+          grep -q 'FOREGROUND_SERVICE_MICROPHONE' app/src/main/AndroidManifest.xml
+          grep -q 'PARTIAL_WAKE_LOCK' app/src/main/java/com/tanu/app/RecordingService.java
+          ! grep -q 'Current TANU storage' app/src/main/java/com/tanu/app/MainActivity.java
+
       - name: Fetch offline Whisper engine
         run: |
           git clone --depth 1 --branch v1.7.6 https://github.com/ggml-org/whisper.cpp.git app/src/main/cpp/whispercpp
@@ -64,13 +77,13 @@ jobs:
 
       - name: Rename APK
         run: |
-          cp app/build/outputs/apk/debug/app-debug.apk TANU-1.2-Premium.apk
-          ls -lh TANU-1.2-Premium.apk
+          cp app/build/outputs/apk/debug/app-debug.apk TANU-1.3-Reliable.apk
+          ls -lh TANU-1.3-Reliable.apk
 
       - name: Upload installable APK
         uses: actions/upload-artifact@v4
         with:
-          name: TANU-1.2-Premium-Android-Install
-          path: TANU-1.2-Premium.apk
+          name: TANU-1.3-Reliable-Android-Install
+          path: TANU-1.3-Reliable.apk
           if-no-files-found: error
           retention-days: 30
