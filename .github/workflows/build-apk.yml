@@ -1,0 +1,65 @@
+name: Build TANU APK
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android build tools
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager "platforms;android-35" "build-tools;35.0.0" "ndk;27.2.12479018" "cmake;3.22.1"
+
+      - name: Generate TANU Android project
+        run: bash ci/generate.sh
+
+      - name: Fetch offline Whisper engine
+        run: |
+          git clone --depth 1 --branch v1.7.6 https://github.com/ggml-org/whisper.cpp.git app/src/main/cpp/whispercpp
+
+      - name: Bundle compact multilingual model
+        run: |
+          curl -L --fail --retry 4 --retry-delay 2 \
+            https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny-q5_1.bin?download=true \
+            -o app/src/main/assets/models/ggml-tiny-q5_1.bin
+          test $(stat -c%s app/src/main/assets/models/ggml-tiny-q5_1.bin) -gt 20000000
+          ls -lh app/src/main/assets/models/ggml-tiny-q5_1.bin
+
+      - name: Set up Gradle 8.9
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Build signed debug APK
+        run: gradle --no-daemon :app:assembleDebug
+
+      - name: Rename APK
+        run: |
+          cp app/build/outputs/apk/debug/app-debug.apk TANU-1.0-Offline.apk
+          ls -lh TANU-1.0-Offline.apk
+
+      - name: Upload installable APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: TANU-Android-Install
+          path: TANU-1.0-Offline.apk
+          if-no-files-found: error
+          retention-days: 30
