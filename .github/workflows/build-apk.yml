@@ -1,4 +1,4 @@
-name: Build TANU APK
+name: Build TANU Premium APK
 
 on:
   push:
@@ -30,28 +30,29 @@ jobs:
           yes | sdkmanager --licenses >/dev/null || true
           sdkmanager "platforms;android-35" "build-tools;35.0.0" "ndk;27.2.12479018" "cmake;3.22.1"
 
-      - name: Generate TANU Android project
+      - name: Generate TANU base project
         run: bash ci/generate.sh
 
-      - name: Apply TANU UI UX 1.1
+      - name: Apply TANU 1.2 Premium UI UX and offline engine
         run: |
-          cat ci/ui_patch.b64.* > /tmp/ui_patch.b64
-          echo "12d4bab0711c99e33d1869467c1fb9df2c4f53f0e9a5e6e89cdf3fc8ef609985  /tmp/ui_patch.b64" | sha256sum -c -
-          base64 -d /tmp/ui_patch.b64 > /tmp/ui_patch.sh
-          echo "ea965d54c9ce1fda19381d3ab9f2a253c09aa255d38ebca9989a50d59f997317  /tmp/ui_patch.sh" | sha256sum -c -
-          bash /tmp/ui_patch.sh
+          cat ci/premium_gzpart_* > /tmp/premium_patch.gz.b64
+          echo "7e66833a4f2282713a89debb62e1fc5979906b78123ef20d05dcb07044577c7c  /tmp/premium_patch.gz.b64" | sha256sum -c -
+          base64 -d /tmp/premium_patch.gz.b64 | gzip -d > /tmp/premium_patch.sh
+          echo "b9536dccfed464290f671a3bba047d13ea0c2acd4fd1302024cfa22258e13ccb  /tmp/premium_patch.sh" | sha256sum -c -
+          bash /tmp/premium_patch.sh
+          sed -i "s/versionCode 1/versionCode 12/; s/versionName '1.0'/versionName '1.2'/" app/build.gradle
 
       - name: Fetch offline Whisper engine
         run: |
           git clone --depth 1 --branch v1.7.6 https://github.com/ggml-org/whisper.cpp.git app/src/main/cpp/whispercpp
 
-      - name: Bundle compact multilingual model
+      - name: Bundle higher-accuracy multilingual model
         run: |
           curl -L --fail --retry 4 --retry-delay 2 \
-            https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny-q5_1.bin?download=true \
-            -o app/src/main/assets/models/ggml-tiny-q5_1.bin
-          test $(stat -c%s app/src/main/assets/models/ggml-tiny-q5_1.bin) -gt 20000000
-          ls -lh app/src/main/assets/models/ggml-tiny-q5_1.bin
+            https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base-q5_1.bin?download=true \
+            -o app/src/main/assets/models/ggml-base-q5_1.bin
+          test $(stat -c%s app/src/main/assets/models/ggml-base-q5_1.bin) -gt 50000000
+          ls -lh app/src/main/assets/models/ggml-base-q5_1.bin
 
       - name: Set up Gradle 8.9
         uses: gradle/actions/setup-gradle@v4
@@ -63,13 +64,13 @@ jobs:
 
       - name: Rename APK
         run: |
-          cp app/build/outputs/apk/debug/app-debug.apk TANU-1.1-UI.apk
-          ls -lh TANU-1.1-UI.apk
+          cp app/build/outputs/apk/debug/app-debug.apk TANU-1.2-Premium.apk
+          ls -lh TANU-1.2-Premium.apk
 
       - name: Upload installable APK
         uses: actions/upload-artifact@v4
         with:
-          name: TANU-1.1-UI-Android-Install
-          path: TANU-1.1-UI.apk
+          name: TANU-1.2-Premium-Android-Install
+          path: TANU-1.2-Premium.apk
           if-no-files-found: error
           retention-days: 30
