@@ -1,4 +1,4 @@
-name: Build TANU 1.3 Reliable APK
+name: Build TANU 1.3.1 Reliable APK
 
 on:
   push:
@@ -55,6 +55,13 @@ jobs:
           grep -q 'PARTIAL_WAKE_LOCK' app/src/main/java/com/tanu/app/RecordingService.java
           ! grep -q 'Current TANU storage' app/src/main/java/com/tanu/app/MainActivity.java
 
+      - name: Add user-controlled MOM deletion
+        run: |
+          echo "693f899b102846d26b1563d82192e517f753c20a7ffe471cff9dcf20b71312b4  ci/tanu131_delete_patch.sh" | sha256sum -c -
+          bash ci/tanu131_delete_patch.sh
+          sed -i "s/versionCode 13/versionCode 14/; s/versionName '1.3'/versionName '1.3.1'/" app/build.gradle
+          grep -q 'Delete this MOM' app/src/main/java/com/tanu/app/MainActivity.java
+
       - name: Fetch offline Whisper engine
         run: |
           git clone --depth 1 --branch v1.7.6 https://github.com/ggml-org/whisper.cpp.git app/src/main/cpp/whispercpp
@@ -77,13 +84,13 @@ jobs:
 
       - name: Rename APK
         run: |
-          cp app/build/outputs/apk/debug/app-debug.apk TANU-1.3-Reliable.apk
-          ls -lh TANU-1.3-Reliable.apk
+          cp app/build/outputs/apk/debug/app-debug.apk TANU-1.3.1-Reliable.apk
+          ls -lh TANU-1.3.1-Reliable.apk
 
       - name: Upload installable APK
         uses: actions/upload-artifact@v4
         with:
-          name: TANU-1.3-Reliable-Android-Install
-          path: TANU-1.3-Reliable.apk
+          name: TANU-1.3.1-Reliable-Android-Install
+          path: TANU-1.3.1-Reliable.apk
           if-no-files-found: error
           retention-days: 30
