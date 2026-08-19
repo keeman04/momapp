@@ -6,6 +6,11 @@ on:
     paths:
       - 'android-v22/**'
       - '.github/workflows/build-v300-a5.yml'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'android-v22/**'
+      - '.github/workflows/build-v300-a5.yml'
   workflow_dispatch:
 
 jobs:
@@ -67,6 +72,9 @@ jobs:
           test ! -e app/src/main/java/com/tanu/personal/ai/LocalLlmProvider.kt
           grep -q 'AiMode.DEVICE -> baseline' app/src/main/java/com/tanu/personal/ai/TanuAgent.kt
           grep -q 'seconds: Int = 20' app/src/main/java/com/tanu/personal/audio/ChunkAccumulator.kt
+          grep -q 'fourHourStreamKeepsMonotonicBoundedChunks' app/src/test/java/com/tanu/personal/audio/ChunkAccumulatorTest.kt
+          grep -q 'return Result.retry()' app/src/main/java/com/tanu/personal/worker/FinalizeMeetingWorker.kt
+          ! grep -q 'failUnfinishedChunks(id)' app/src/main/java/com/tanu/personal/worker/FinalizeMeetingWorker.kt
           grep -q 'foregroundServiceType="microphone"' app/src/main/AndroidManifest.xml
 
       - name: Set up Gradle 9.5.0
@@ -74,7 +82,7 @@ jobs:
         with:
           gradle-version: '9.5.0'
 
-      - name: Run unit tests
+      - name: Run unit and long-meeting tests
         run: |
           cd android-v22
           gradle --no-daemon --max-workers=2 :app:testDebugUnitTest
