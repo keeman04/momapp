@@ -1,0 +1,112 @@
+name: Build TANU Personal v3.0.0 Redmi A5 APK
+
+on:
+  push:
+    branches: [ tanu-v3-a5 ]
+    paths:
+      - 'android-v22/**'
+      - '.github/workflows/build-v300-a5.yml'
+  workflow_dispatch:
+
+jobs:
+  build-a5:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    env:
+      GRADLE_OPTS: -Dorg.gradle.jvmargs=-Xmx4g -Dfile.encoding=UTF-8
+
+    steps:
+      - name: Checkout TANU v3 A5
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android native toolchain
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager \
+            "platforms;android-36" \
+            "build-tools;36.0.0" \
+            "ndk;28.2.13676358" \
+            "cmake;3.22.1"
+
+      - name: Fetch pinned whisper.cpp
+        run: |
+          cd android-v22
+          rm -rf app/src/main/cpp/whispercpp
+          git clone --depth 1 --branch v1.7.6 https://github.com/ggml-org/whisper.cpp.git app/src/main/cpp/whispercpp
+
+      - name: Bundle compact offline speech model only
+        run: |
+          cd android-v22
+          rm -rf app/src/main/assets/models
+          mkdir -p app/src/main/assets/models
+          curl -L --fail --retry 4 --retry-delay 3 \
+            'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny-q5_1.bin?download=true' \
+            -o app/src/main/assets/models/ggml-tiny-q5_1.bin
+          test "$(stat -c%s app/src/main/assets/models/ggml-tiny-q5_1.bin)" -gt 20000000
+          test "$(find app/src/main/assets/models -maxdepth 1 -type f | wc -l)" -eq 1
+          test ! -e app/src/main/assets/models/Qwen3-0.6B-Q4_K_M.gguf
+
+      - name: Verify Redmi A5 lightweight source
+        run: |
+          cd android-v22
+          grep -q 'versionName = "3.0.0"' app/build.gradle.kts
+          grep -q 'versionCode = 30' app/build.gradle.kts
+          grep -q 'minSdk = 30' app/build.gradle.kts
+          ! grep -q 'project(":llamaLib")' app/build.gradle.kts
+          ! grep -q 'include(":llamaLib")' settings.gradle.kts
+          test ! -e app/src/main/java/com/tanu/personal/ai/LocalLlmProvider.kt
+          grep -q 'AiMode.DEVICE -> baseline' app/src/main/java/com/tanu/personal/ai/TanuAgent.kt
+          grep -q 'seconds: Int = 20' app/src/main/java/com/tanu/personal/audio/ChunkAccumulator.kt
+          grep -q 'foregroundServiceType="microphone"' app/src/main/AndroidManifest.xml
+
+      - name: Set up Gradle 9.5.0
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.5.0'
+
+      - name: Run unit tests
+        run: |
+          cd android-v22
+          gradle --no-daemon --max-workers=2 :app:testDebugUnitTest
+
+      - name: Run Android lint
+        run: |
+          cd android-v22
+          gradle --no-daemon --max-workers=2 :app:lintDebug
+
+      - name: Build TANU v3 A5 APK
+        run: |
+          cd android-v22
+          gradle --no-daemon --max-workers=2 :app:assembleDebug
+
+      - name: Verify APK contents
+        run: |
+          cd android-v22
+          test -f app/build/outputs/apk/debug/app-debug.apk
+          cp app/build/outputs/apk/debug/app-debug.apk TANU-Personal-v3.0.0-Redmi-A5.apk
+          unzip -l TANU-Personal-v3.0.0-Redmi-A5.apk | grep -q 'assets/models/ggml-tiny-q5_1.bin'
+          ! unzip -Z1 TANU-Personal-v3.0.0-Redmi-A5.apk | grep -q 'Qwen3-0.6B-Q4_K_M.gguf'
+          ! unzip -Z1 TANU-Personal-v3.0.0-Redmi-A5.apk | grep -q 'libai-chat.so'
+          unzip -l TANU-Personal-v3.0.0-Redmi-A5.apk | grep -q 'lib/arm64-v8a/libtanu-whisper.so'
+          sha256sum TANU-Personal-v3.0.0-Redmi-A5.apk | tee TANU-Personal-v3.0.0-Redmi-A5.apk.sha256
+          ls -lh TANU-Personal-v3.0.0-Redmi-A5.apk
+
+      - name: Upload installable APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: TANU-Personal-v3.0.0-Redmi-A5-Android-Install
+          path: |
+            android-v22/TANU-Personal-v3.0.0-Redmi-A5.apk
+            android-v22/TANU-Personal-v3.0.0-Redmi-A5.apk.sha256
+          if-no-files-found: error
+          retention-days: 30
