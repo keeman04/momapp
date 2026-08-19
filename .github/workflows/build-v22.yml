@@ -17,6 +17,8 @@ jobs:
       contents: read
     env:
       LLAMA_CPP_SHA: 645ca2834bc16e7eab112a91aeb282ebb913f935
+      QWEN_REV: 1208e45d782fe18602c5eaf10e5758d5b0f24c03
+      QWEN_SHA256: b0638f08417a2d3c8652760462eb5407c6e30173cf9608ad0820757a281eea0e
       GRADLE_OPTS: -Dorg.gradle.jvmargs=-Xmx5g -Dfile.encoding=UTF-8
 
     steps:
@@ -136,14 +138,14 @@ jobs:
             -o app/src/main/assets/models/ggml-tiny-q5_1.bin
           test "$(stat -c%s app/src/main/assets/models/ggml-tiny-q5_1.bin)" -gt 20000000
 
-      - name: Bundle embedded TANU Qwen model
+      - name: Bundle pinned TANU Qwen model
         run: |
           cd android-v22
           curl -L --fail --retry 4 --retry-delay 5 \
-            'https://huggingface.co/Qwen/Qwen3-0.6B-GGUF/resolve/main/Qwen3-0.6B-Q4_K_M.gguf?download=true' \
+            "https://huggingface.co/Qwen/Qwen3-0.6B-GGUF/resolve/${QWEN_REV}/Qwen3-0.6B-Q4_K_M.gguf?download=true" \
             -o app/src/main/assets/models/Qwen3-0.6B-Q4_K_M.gguf
           test "$(stat -c%s app/src/main/assets/models/Qwen3-0.6B-Q4_K_M.gguf)" -gt 250000000
-          sha256sum app/src/main/assets/models/Qwen3-0.6B-Q4_K_M.gguf
+          echo "${QWEN_SHA256}  app/src/main/assets/models/Qwen3-0.6B-Q4_K_M.gguf" | sha256sum -c -
           ls -lh app/src/main/assets/models/
 
       - name: Validate v2.2 product rules
