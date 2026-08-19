@@ -29,14 +29,31 @@ jobs:
       - name: Install Android toolchain
         run: |
           yes | sdkmanager --licenses >/dev/null || true
-          sdkmanager "platforms;android-36" "build-tools;36.0.0" "ndk;27.2.12479018" "cmake;3.22.1"
+          sdkmanager "platforms;android-36" "build-tools;36.0.0" "ndk;28.2.13676358" "cmake;3.22.1"
 
-      - name: Reconstruct TANU Personal v2 source
+      - name: Reconstruct verified TANU Personal v2 source
         run: |
-          cat v2bundle/source.b64.* > /tmp/tanu_personal_v2_fast.b64
-          sha256sum /tmp/tanu_personal_v2_fast.b64
+          cat \
+            v2bundle/source.b64.00 \
+            v2bundle/source.b64.010 \
+            v2bundle/source.b64.020 \
+            v2bundle/source.b64.030 \
+            v2bundle/source.b64.031 \
+            v2bundle/source.b64.040 \
+            v2bundle/source.b64.041 \
+            v2bundle/source.b64.050 \
+            v2bundle/source.b64.051 \
+            v2bundle/source.b64.060 \
+            v2bundle/source.b64.061 \
+            v2bundle/source.b64.070 \
+            v2bundle/source.b64.071 \
+            v2bundle/source.b64.080 \
+            v2bundle/source.b64.081 \
+            v2bundle/source.b64.09 \
+            > /tmp/tanu_personal_v2_fast.b64
+          echo "2fd2357218fb4a17021a467eab670319d4ccc1cac83fb27be931564e1169ceb9  /tmp/tanu_personal_v2_fast.b64" | sha256sum -c -
           base64 -d /tmp/tanu_personal_v2_fast.b64 > /tmp/tanu_personal_v2_fast.tgz
-          sha256sum /tmp/tanu_personal_v2_fast.tgz
+          echo "76c8924956a10fdab55ed930b303373367a2c3aa4ca56981f3ad53d4b31a3e95  /tmp/tanu_personal_v2_fast.tgz" | sha256sum -c -
           tar -tzf /tmp/tanu_personal_v2_fast.tgz >/tmp/tanu_v2_filelist.txt
           rm -rf /tmp/tanu_personal_v2
           tar -xzf /tmp/tanu_personal_v2_fast.tgz -C /tmp
@@ -57,7 +74,9 @@ jobs:
         run: |
           cd /tmp/tanu_personal_v2
           sed -i 's/compileSdk[[:space:]]*=[[:space:]]*37/compileSdk = 36/' app/build.gradle.kts
+          grep -Eq 'compileSdk[[:space:]]*=[[:space:]]*36' app/build.gradle.kts
           grep -Eq 'targetSdk[[:space:]]*=[[:space:]]*36' app/build.gradle.kts
+          grep -Eq 'ndkVersion[[:space:]]*=[[:space:]]*"28\.2\.13676358"' app/build.gradle.kts
 
       - name: Validate non-stalling production rules
         run: |
@@ -70,8 +89,8 @@ jobs:
           grep -q 'foregroundServiceType="microphone"' app/src/main/AndroidManifest.xml
           grep -q 'readTimeout=30000' app/src/main/java/com/tanu/personal/transcription/FastServerProvider.kt
           grep -q 'audio chunks' app/src/main/java/com/tanu/personal/MainActivity.kt
-          grep -q 'markUnfinishedChunksFailed' app/src/main/java/com/tanu/personal/data/local/TanuDao.kt
-          grep -q '5 \* 60 \* 1000' app/src/main/java/com/tanu/personal/work/FinalizeMeetingWorker.kt
+          grep -q 'failUnfinishedChunks' app/src/main/java/com/tanu/personal/db/TanuDao.kt
+          grep -q 'seconds<300' app/src/main/java/com/tanu/personal/worker/FinalizeMeetingWorker.kt
           ! grep -R -E 'Bearer[[:space:]]+[A-Za-z0-9._-]{20,}' app/src/main/java
 
       - name: Fetch offline Whisper engine
