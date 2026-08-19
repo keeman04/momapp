@@ -30,24 +30,14 @@ jobs:
         run: |
           echo "693f899b102846d26b1563d82192e517f753c20a7ffe471cff9dcf20b71312b4  ci/tanu131_delete_patch.sh" | sha256sum -c -
           bash ci/tanu131_delete_patch.sh
-      - name: List Java files
-        run: find app/src/main/java -type f -maxdepth 10 -print
-      - name: Print MainActivity
-        run: sed -n '1,1200p' app/src/main/java/com/tanu/app/MainActivity.java
-      - name: Print RecordingService
-        run: sed -n '1,800p' app/src/main/java/com/tanu/app/RecordingService.java
-      - name: Print engine and store files
+      - name: Print native bridge
         run: |
-          for f in app/src/main/java/com/tanu/app/*.java; do
-            case "$f" in
-              *MainActivity.java|*RecordingService.java) continue ;;
-            esac
+          echo '===== CMAKE ====='
+          cat app/src/main/cpp/CMakeLists.txt
+          echo '===== CPP FILES ====='
+          find app/src/main/cpp -maxdepth 1 -type f -print
+          for f in app/src/main/cpp/*.cpp app/src/main/cpp/*.cc app/src/main/cpp/*.c; do
+            [ -f "$f" ] || continue
             echo "===== $f ====="
-            sed -n '1,800p' "$f"
+            sed -n '1,1000p' "$f"
           done
-      - name: Print manifest and gradle
-        run: |
-          echo '===== MANIFEST ====='
-          cat app/src/main/AndroidManifest.xml
-          echo '===== GRADLE ====='
-          cat app/build.gradle
