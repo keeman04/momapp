@@ -81,7 +81,7 @@ class MainViewModel @Inject constructor(
     fun clearFastServerToken(){tokens.save("")}
     fun hasFastServerToken()=tokens.load().isNotBlank()
 
-    fun setRetention(value:String){settings.retention=value}
+    fun setRetention(value:String){settings.retention=value;settings.retentionConfigured=true}
     fun setAiMode(value:String){settings.aiMode=value}
     fun saveOpenAiKey(value:String){openAiKeys.save(value)}
     fun clearOpenAiKey(){openAiKeys.clear()}
