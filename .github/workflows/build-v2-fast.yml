@@ -70,16 +70,25 @@ jobs:
           cd /tmp/tanu_personal_v2
           patch -p1 < /tmp/tanu_v2_stuck_fix.patch
 
-      - name: Normalize Android API target and AGP compatibility
+      - name: Migrate build to AGP 9 built-in Kotlin
         run: |
           cd /tmp/tanu_personal_v2
           sed -i 's/compileSdk[[:space:]]*=[[:space:]]*37/compileSdk = 36/' app/build.gradle.kts
-          printf '\nandroid.builtInKotlin=false\nandroid.newDsl=false\n' >> gradle.properties
+          sed -i '/id("org.jetbrains.kotlin.android") version/d' build.gradle.kts
+          sed -i '/id("org.jetbrains.kotlin.kapt") version/d' build.gradle.kts
+          sed -i '/id("com.android.application") version "9.3.0" apply false/a\    id("com.android.legacy-kapt") version "9.3.0" apply false' build.gradle.kts
+          sed -i '/id("org.jetbrains.kotlin.android")/d' app/build.gradle.kts
+          sed -i '/id("org.jetbrains.kotlin.kapt")/d' app/build.gradle.kts
+          sed -i '/id("com.android.application")/a\    id("com.android.legacy-kapt")' app/build.gradle.kts
+          sed -i '/kotlinOptions { jvmTarget = "17" }/d' app/build.gradle.kts
           grep -Eq 'compileSdk[[:space:]]*=[[:space:]]*36' app/build.gradle.kts
           grep -Eq 'targetSdk[[:space:]]*=[[:space:]]*36' app/build.gradle.kts
           grep -Eq 'ndkVersion[[:space:]]*=[[:space:]]*"28\.2\.13676358"' app/build.gradle.kts
-          grep -q 'android.builtInKotlin=false' gradle.properties
-          grep -q 'android.newDsl=false' gradle.properties
+          grep -q 'com.android.legacy-kapt' build.gradle.kts
+          grep -q 'com.android.legacy-kapt' app/build.gradle.kts
+          ! grep -q 'org.jetbrains.kotlin.android' app/build.gradle.kts
+          ! grep -q 'org.jetbrains.kotlin.kapt' app/build.gradle.kts
+          ! grep -q 'kotlinOptions' app/build.gradle.kts
 
       - name: Validate non-stalling production rules
         run: |
