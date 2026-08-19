@@ -1,0 +1,43 @@
+name: Inspect TANU Generated Source
+
+on:
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Generate base
+        run: bash ci/generate.sh
+      - name: Apply premium
+        run: |
+          cat ci/premium_gzpart_* > /tmp/premium_patch.gz.b64
+          echo "7e66833a4f2282713a89debb62e1fc5979906b78123ef20d05dcb07044577c7c  /tmp/premium_patch.gz.b64" | sha256sum -c -
+          base64 -d /tmp/premium_patch.gz.b64 | gzip -d > /tmp/premium_patch.sh
+          echo "b9536dccfed464290f671a3bba047d13ea0c2acd4fd1302024cfa22258e13ccb  /tmp/premium_patch.sh" | sha256sum -c -
+          bash /tmp/premium_patch.sh
+      - name: Apply 1.3 reliability
+        run: |
+          cat ci/tanu13_patch.b64.* > /tmp/tanu13_patch.gz.b64
+          echo "6b72bdb72e7a05f00a07f9e51a959af2d88c4a2ad93fb48deef0901f63ceba43  /tmp/tanu13_patch.gz.b64" | sha256sum -c -
+          base64 -d /tmp/tanu13_patch.gz.b64 | gzip -d > /tmp/tanu13_apply.sh
+          echo "f6d1811546dd68f896b19ba9638c36a322a6b79c78b10bdee02697bdc4bd2027  /tmp/tanu13_apply.sh" | sha256sum -c -
+          bash /tmp/tanu13_apply.sh
+      - name: Apply 1.3.1 MOM delete
+        run: |
+          echo "693f899b102846d26b1563d82192e517f753c20a7ffe471cff9dcf20b71312b4  ci/tanu131_delete_patch.sh" | sha256sum -c -
+          bash ci/tanu131_delete_patch.sh
+      - name: Print native bridge
+        run: |
+          echo '===== CMAKE ====='
+          cat app/src/main/cpp/CMakeLists.txt
+          echo '===== CPP FILES ====='
+          find app/src/main/cpp -maxdepth 1 -type f -print
+          for f in app/src/main/cpp/*.cpp app/src/main/cpp/*.cc app/src/main/cpp/*.c; do
+            [ -f "$f" ] || continue
+            echo "===== $f ====="
+            sed -n '1,1000p' "$f"
+          done
