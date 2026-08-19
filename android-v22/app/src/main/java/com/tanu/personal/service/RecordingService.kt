@@ -49,14 +49,19 @@ class RecordingService : Service() {
         @Volatile var activeMeetingId: String? = null
         @Volatile var isRecording = false
         @Volatile var isPaused = false
-        @Volatile var startedAt = 0L
+        @Volatile private var rawStartedAt = 0L
         @Volatile private var pausedAt = 0L
         @Volatile private var totalPausedMs = 0L
 
+        // Kept as a computed property for the existing UI. `now - startedAt` equals the
+        // actual recorded duration and therefore freezes while recording is paused.
+        val startedAt: Long
+            get() = if (rawStartedAt <= 0L) 0L else System.currentTimeMillis() - elapsedMs()
+
         fun elapsedMs(now: Long = System.currentTimeMillis()): Long {
-            if (startedAt <= 0L) return 0L
+            if (rawStartedAt <= 0L) return 0L
             val activePause = if (isPaused && pausedAt > 0L) now - pausedAt else 0L
-            return (now - startedAt - totalPausedMs - activePause).coerceAtLeast(0L)
+            return (now - rawStartedAt - totalPausedMs - activePause).coerceAtLeast(0L)
         }
     }
 
@@ -95,7 +100,7 @@ class RecordingService : Service() {
         meetingId = id
         title = t.ifBlank { "Meeting" }
         started = System.currentTimeMillis()
-        startedAt = started
+        rawStartedAt = started
         pausedAt = 0L
         totalPausedMs = 0L
         activeMeetingId = id
@@ -174,7 +179,7 @@ class RecordingService : Service() {
             activeMeetingId = null
             isRecording = false
             isPaused = false
-            startedAt = 0L
+            rawStartedAt = 0L
             pausedAt = 0L
             totalPausedMs = 0L
             runBlocking { repo.markFailed(id, e.message ?: "Microphone could not start") }
@@ -221,7 +226,7 @@ class RecordingService : Service() {
 
         isRecording = false
         activeMeetingId = null
-        startedAt = 0L
+        rawStartedAt = 0L
         pausedAt = 0L
         totalPausedMs = 0L
         stopForeground(STOP_FOREGROUND_REMOVE)
