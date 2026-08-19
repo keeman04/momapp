@@ -1,5 +1,6 @@
 package com.tanu.personal.ai
 
+import android.app.ActivityManager
 import android.content.Context
 import com.arm.aichat.AiChat
 import com.arm.aichat.InferenceEngine
@@ -28,6 +29,7 @@ class LocalLlmProvider @Inject constructor(
         baseline: MomEngine.Result,
         userName: String
     ): MomEngine.Result = mutex.withLock {
+        require(hasSafeMemoryHeadroom()) { "On-device AI memory is low; using TANU fallback notes." }
         val engine = AiChat.getInferenceEngine(context)
         try {
             awaitInitialized(engine)
@@ -64,6 +66,14 @@ class LocalLlmProvider @Inject constructor(
         }
     }
 
+    private fun hasSafeMemoryHeadroom(): Boolean {
+        val am = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
+        val info = ActivityManager.MemoryInfo()
+        am.getMemoryInfo(info)
+        val minimumFree = 900L * 1024L * 1024L
+        return !info.lowMemory && info.availMem >= minimumFree && am.largeMemoryClass >= 384
+    }
+
     private fun ensureModelFile(): File {
         val dir = File(context.filesDir, "models").apply { mkdirs() }
         val final = File(dir, "Qwen3-0.6B-Q4_K_M.gguf")
@@ -71,12 +81,17 @@ class LocalLlmProvider @Inject constructor(
 
         val temp = File(dir, "${final.name}.part")
         if (temp.exists()) temp.delete()
-        context.assets.open(assetName).use { input ->
-            temp.outputStream().buffered().use { output -> input.copyTo(output, 1024 * 1024) }
+        try {
+            context.assets.open(assetName).use { input ->
+                temp.outputStream().buffered().use { output -> input.copyTo(output, 1024 * 1024) }
+            }
+            require(temp.length() > 250_000_000L) { "Bundled TANU AI model is incomplete" }
+            if (final.exists()) final.delete()
+            require(temp.renameTo(final)) { "Could not prepare the TANU AI model" }
+            return final
+        } catch (e: Exception) {
+            runCatching { temp.delete() }
+            throw e
         }
-        require(temp.length() > 250_000_000L) { "Bundled TANU AI model is incomplete" }
-        if (final.exists()) final.delete()
-        require(temp.renameTo(final)) { "Could not prepare the TANU AI model" }
-        return final
     }
 }
