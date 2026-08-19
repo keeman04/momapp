@@ -201,9 +201,32 @@ jobs:
           gradle --no-daemon --max-workers=2 :app:testDebugUnitTest
 
       - name: Run Android lint
+        id: lint
+        continue-on-error: true
         run: |
           cd android-v22
           gradle --no-daemon --max-workers=2 :app:lintDebug
+
+      - name: Upload Android lint report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: TANU-v2.2.1-lint-report
+          path: |
+            android-v22/app/build/reports/lint-results-debug.txt
+            android-v22/app/build/reports/lint-results-debug.xml
+            android-v22/app/build/reports/lint-results-debug.html
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Enforce Android lint
+        if: steps.lint.outcome != 'success'
+        run: |
+          cd android-v22
+          if [ -f app/build/reports/lint-results-debug.txt ]; then
+            cat app/build/reports/lint-results-debug.txt
+          fi
+          exit 1
 
       - name: Build hardened TANU APK
         run: |
