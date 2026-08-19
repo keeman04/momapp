@@ -16,7 +16,6 @@ import javax.inject.Singleton
 class TanuAgent @Inject constructor(
     @ApplicationContext private val context: Context,
     private val deterministic: MomEngine,
-    private val local: LocalLlmProvider,
     private val openAi: OpenAiMomProvider,
     private val settings: SettingsStore
 ) {
@@ -25,34 +24,25 @@ class TanuAgent @Inject constructor(
         val userName = settings.userName
 
         return when (settings.aiMode) {
-            AiMode.DEVICE -> localOrBaseline(meeting, segments, baseline, userName)
+            AiMode.DEVICE -> baseline
             AiMode.OPENAI -> {
                 if (openAi.available() && online()) {
                     runCatching { openAi.enhance(meeting, segments, baseline, userName) }
-                        .getOrElse { localOrBaseline(meeting, segments, baseline, userName) }
+                        .getOrElse { baseline }
                 } else {
-                    localOrBaseline(meeting, segments, baseline, userName)
+                    baseline
                 }
             }
             else -> {
                 if (openAi.available() && online()) {
                     runCatching { openAi.enhance(meeting, segments, baseline, userName) }
-                        .getOrElse { localOrBaseline(meeting, segments, baseline, userName) }
+                        .getOrElse { baseline }
                 } else {
-                    localOrBaseline(meeting, segments, baseline, userName)
+                    baseline
                 }
             }
         }
     }
-
-    private suspend fun localOrBaseline(
-        meeting: MeetingEntity,
-        segments: List<TranscriptSegmentEntity>,
-        baseline: MomEngine.Result,
-        userName: String
-    ): MomEngine.Result = runCatching {
-        local.enhance(meeting, segments, baseline, userName)
-    }.getOrElse { baseline }
 
     private fun online(): Boolean {
         val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
