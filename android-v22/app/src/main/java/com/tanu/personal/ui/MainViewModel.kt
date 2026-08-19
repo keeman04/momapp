@@ -2,7 +2,6 @@ package com.tanu.personal.ui
 
 import android.content.Context
 import android.content.Intent
-import android.os.Build
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.tanu.personal.data.*
@@ -51,7 +50,7 @@ class MainViewModel @Inject constructor(
             .setAction(RecordingService.ACTION_START)
             .putExtra(RecordingService.EXTRA_ID, meeting.id)
             .putExtra(RecordingService.EXTRA_TITLE, meeting.title)
-        if (Build.VERSION.SDK_INT >= 26) context.startForegroundService(intent) else context.startService(intent)
+        context.startForegroundService(intent)
         onStarted(meeting.id)
     }
 
