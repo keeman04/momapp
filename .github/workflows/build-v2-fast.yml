@@ -1,0 +1,114 @@
+name: Build TANU Personal v2 Fast APK
+
+on:
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android toolchain
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager "platforms;android-36" "build-tools;36.0.0" "ndk;27.2.12479018" "cmake;3.22.1"
+
+      - name: Reconstruct TANU Personal v2 source
+        run: |
+          cat v2bundle/source.b64.* > /tmp/tanu_personal_v2_fast.b64
+          echo "2fd2357218fb4a17021a467eab670319d4ccc1cac83fb27be931564e1169ceb9  /tmp/tanu_personal_v2_fast.b64" | sha256sum -c -
+          base64 -d /tmp/tanu_personal_v2_fast.b64 > /tmp/tanu_personal_v2_fast.tgz
+          echo "76c8924956a10fdab55ed930b303373367a2c3aa4ca56981f3ad53d4b31a3e95  /tmp/tanu_personal_v2_fast.tgz" | sha256sum -c -
+          rm -rf /tmp/tanu_personal_v2
+          tar -xzf /tmp/tanu_personal_v2_fast.tgz -C /tmp
+          test -f /tmp/tanu_personal_v2/app/build.gradle.kts
+
+      - name: Apply anti-stall MOM hotfix
+        run: |
+          cat v2bundle/hotfix.b64.* > /tmp/tanu_v2_hotfix.b64
+          echo "dd8156e75c166d188126d19ec499c5071ef2fd434749c6d2ec23ad5e249c3cbd  /tmp/tanu_v2_hotfix.b64" | sha256sum -c -
+          base64 -d /tmp/tanu_v2_hotfix.b64 | gzip -d > /tmp/tanu_v2_stuck_fix.patch
+          echo "6e4ad88c4b3de325199dd330a95cc75dc86d189e77c82169e083908338e18921  /tmp/tanu_v2_stuck_fix.patch" | sha256sum -c -
+          cd /tmp/tanu_personal_v2
+          patch -p1 < /tmp/tanu_v2_stuck_fix.patch
+
+      - name: Normalize Android API target
+        run: |
+          cd /tmp/tanu_personal_v2
+          sed -i 's/compileSdk[[:space:]]*=[[:space:]]*37/compileSdk = 36/' app/build.gradle.kts
+          grep -Eq 'targetSdk[[:space:]]*=[[:space:]]*36' app/build.gradle.kts
+
+      - name: Validate non-stalling production rules
+        run: |
+          cd /tmp/tanu_personal_v2
+          grep -q 'seconds:Int=20' app/src/main/java/com/tanu/personal/audio/ChunkAccumulator.kt
+          grep -q 'overlapSeconds:Int=1' app/src/main/java/com/tanu/personal/audio/ChunkAccumulator.kt
+          grep -q 'Channel.UNLIMITED' app/src/main/java/com/tanu/personal/service/RecordingService.kt
+          grep -q 'PARTIAL_WAKE_LOCK' app/src/main/java/com/tanu/personal/service/RecordingService.kt
+          grep -q 'FLAG_KEEP_SCREEN_ON' app/src/main/java/com/tanu/personal/MainActivity.kt
+          grep -q 'foregroundServiceType="microphone"' app/src/main/AndroidManifest.xml
+          grep -q 'readTimeout=30000' app/src/main/java/com/tanu/personal/transcription/FastServerProvider.kt
+          grep -q 'audio chunks' app/src/main/java/com/tanu/personal/MainActivity.kt
+          grep -q 'markUnfinishedChunksFailed' app/src/main/java/com/tanu/personal/data/local/TanuDao.kt
+          grep -q '5 \* 60 \* 1000' app/src/main/java/com/tanu/personal/work/FinalizeMeetingWorker.kt
+          ! grep -R -E 'Bearer[[:space:]]+[A-Za-z0-9._-]{20,}' app/src/main/java
+
+      - name: Fetch offline Whisper engine
+        run: |
+          cd /tmp/tanu_personal_v2
+          rm -rf app/src/main/cpp/whispercpp
+          git clone --depth 1 --branch v1.7.6 https://github.com/ggml-org/whisper.cpp.git app/src/main/cpp/whispercpp
+
+      - name: Bundle fast multilingual model
+        run: |
+          cd /tmp/tanu_personal_v2
+          mkdir -p app/src/main/assets/models
+          curl -L --fail --retry 4 --retry-delay 2 \
+            'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny-q5_1.bin?download=true' \
+            -o app/src/main/assets/models/ggml-tiny-q5_1.bin
+          test $(stat -c%s app/src/main/assets/models/ggml-tiny-q5_1.bin) -gt 20000000
+          ls -lh app/src/main/assets/models/ggml-tiny-q5_1.bin
+
+      - name: Set up Gradle 9.5.0
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.5.0'
+
+      - name: Build Android APK
+        run: |
+          cd /tmp/tanu_personal_v2
+          gradle --no-daemon :app:assembleDebug
+
+      - name: Verify and rename APK
+        run: |
+          cd /tmp/tanu_personal_v2
+          test -f app/build/outputs/apk/debug/app-debug.apk
+          cp app/build/outputs/apk/debug/app-debug.apk TANU-Personal-v2-Fast.apk
+          sha256sum TANU-Personal-v2-Fast.apk | tee TANU-Personal-v2-Fast.apk.sha256
+          ls -lh TANU-Personal-v2-Fast.apk
+
+      - name: Upload installable APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: TANU-Personal-v2-Fast-Android-Install
+          path: |
+            /tmp/tanu_personal_v2/TANU-Personal-v2-Fast.apk
+            /tmp/tanu_personal_v2/TANU-Personal-v2-Fast.apk.sha256
+          if-no-files-found: error
+          retention-days: 30
