@@ -26,18 +26,26 @@ class FinalizeMeetingWorker @AssistedInject constructor(
         val meeting = dao.meeting(id) ?: return Result.success()
 
         return try {
-            // Rolling transcription should already be nearly complete when Stop is pressed.
-            // Keep the tail bounded so the UI can never wait forever.
+            // Entry-level phones can build a backlog during multi-hour meetings.
+            // Never discard unfinished audio just because transcription is slower than real time.
             var pending = dao.pendingChunkCount(id)
             var seconds = 0
-            while (pending > 0 && seconds < 300 && !isStopped) {
-                dao.setMeetingStatus(id, MeetingStatus.TRANSCRIBING, null)
+            while (pending > 0 && seconds < 120 && !isStopped) {
+                dao.setMeetingStatus(
+                    id,
+                    MeetingStatus.TRANSCRIBING,
+                    "Recording is safe. TANU is finishing the remaining audio."
+                )
                 delay(2000)
                 seconds += 2
                 pending = dao.pendingChunkCount(id)
             }
-            if (isStopped) return Result.failure()
-            if (pending > 0) dao.failUnfinishedChunks(id)
+
+            if (isStopped || pending > 0) {
+                // WorkManager will retry later. Keep PCM chunks until every available section
+                // has either completed transcription or genuinely failed in its own worker.
+                return Result.retry()
+            }
 
             val segments = dao.segments(id)
             val failed = dao.failedChunkCount(id)
@@ -47,6 +55,7 @@ class FinalizeMeetingWorker @AssistedInject constructor(
                     MeetingStatus.FAILED,
                     "No usable speech was detected. Please retry with a clearer recording."
                 )
+                repo.cleanupChunkFiles(id)
                 return Result.failure()
             }
 
@@ -61,13 +70,15 @@ class FinalizeMeetingWorker @AssistedInject constructor(
             } else null
             dao.setMeetingStatus(id, MeetingStatus.READY, warning)
             repo.applyRetention(meeting.audioPath)
+            repo.cleanupChunkFiles(id)
             Result.success()
         } catch (e: Exception) {
-            dao.setMeetingStatus(id, MeetingStatus.FAILED, e.message?.take(240) ?: "Meeting notes could not be created")
+            dao.setMeetingStatus(
+                id,
+                MeetingStatus.FAILED,
+                e.message?.take(240) ?: "Meeting notes could not be created"
+            )
             Result.failure()
-        } finally {
-            // PCM work chunks are temporary. Transcript text is already in Room.
-            repo.cleanupChunkFiles(id)
         }
     }
 }
