@@ -1,35 +1,46 @@
-# TANU Android 1.0 Offline Lite
+# TANU Personal v2.2.1
 
-TANU = Transcription, Actions, Notes & Updates.
+TANU is a local-first Android AI conversation assistant for meetings, voice notes and imported recordings.
 
-This Android build is designed around a strict local-first core:
+## Current production flow
 
-- local account signup/login
-- guest participants do not need TANU IDs
-- compressed Opus/AAC meeting recording
-- bundled multilingual Whisper model
-- on-device speech-to-English transcription/translation
-- English-only MOM generation
-- decisions/action/pending-item extraction
-- local meeting history/search
-- approve MOM and automatically delete audio
-- share approved MOM through Android's system share sheet
-- no INTERNET permission in the TANU APK
+- reliable foreground microphone recording with screen-off support
+- compressed AAC/M4A master audio
+- hardware noise suppression, echo cancellation and gain control where supported
+- 20-second rolling PCM work chunks with 1-second overlap
+- speech gating before transcription
+- bundled multilingual Whisper for on-device transcription
+- participant names and custom vocabulary for recognition context
+- embedded Qwen3 0.6B via llama.cpp for private on-device meeting understanding
+- deterministic local MOM fallback if the embedded LLM cannot run
+- optional OpenAI final-MOM enhancement when a personal API key is connected
+- English MOM with summary, decisions, actions, owners, dates and follow-ups
+- Room meeting history, actions, people and search
+- WhatsApp, email, text and PDF sharing
+- audio auto-retention independent from permanent MOM/transcript retention
+- floating TANU quick-access bubble
+- action reminders
 
-## Storage strategy
+## Models shipped in the APK
 
-The app bundles the quantized multilingual Whisper tiny Q5_1 model (~31 MiB). Meeting audio remains compressed and is deleted when the MOM is approved. TANU Lite does not bundle a large language model; its MOM engine is deterministic and local to minimize installation size.
+The production APK contains exactly two AI model files:
 
-## Build
+1. `ggml-tiny-q5_1.bin` — multilingual Whisper speech recognition.
+2. `Qwen3-0.6B-Q4_K_M.gguf` — local meeting understanding/MOM enhancement.
 
-GitHub Actions builds an installable arm64-v8a debug APK named:
+Both are active runtime dependencies. Legacy models, FastServer code, encoded source bundles, old backend prototypes, old previews and legacy build workflows have been removed from the v2.2.1 production branch.
 
-`TANU-1.0-offline-arm64.apk`
+## Build and tests
 
-The build workflow fetches whisper.cpp v1.9.1 and the verified quantized model during CI, then packages both into the APK.
+The only release workflow is `.github/workflows/build-v221-hardening.yml`.
+
+Before creating the APK it verifies repository cleanup, exact model count/hashes, recorder and wake-lock requirements, unit tests, a simulated four-hour rolling-recording stress test, speech-gate tests, transcript-overlap tests, Android lint, Kotlin/native compilation and final APK contents.
+
+Output artifact: `TANU-Personal-v2.2.1-Hardened.apk`.
 
 ## Device support
 
-- Android 8.0 (API 26) or newer
-- 64-bit ARM (`arm64-v8a`) Android phone
-- microphone required
+- Android 11 (API 30) or newer
+- 64-bit ARM (`arm64-v8a`)
+- microphone required for live recording
+- internet is optional and only needed for OpenAI mode/sharing that requires network access
