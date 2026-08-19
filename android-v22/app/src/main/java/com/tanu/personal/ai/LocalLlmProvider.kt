@@ -71,7 +71,9 @@ class LocalLlmProvider @Inject constructor(
         val info = ActivityManager.MemoryInfo()
         am.getMemoryInfo(info)
         val minimumFree = 900L * 1024L * 1024L
-        return !info.lowMemory && info.availMem >= minimumFree && am.largeMemoryClass >= 384
+        // llama.cpp allocates most model memory natively, so system memory pressure is a
+        // better safety signal than Android's Java heap class.
+        return !info.lowMemory && info.availMem >= minimumFree
     }
 
     private fun ensureModelFile(): File {
