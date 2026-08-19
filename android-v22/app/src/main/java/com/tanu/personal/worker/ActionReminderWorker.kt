@@ -31,7 +31,7 @@ class ActionReminderWorker @AssistedInject constructor(
         createChannel()
         if (!canNotify()) return Result.success()
         val today = LocalDate.now()
-        dao.openActionsNow().filter { action ->
+        dao.openActionsList().filter { action ->
             parseDate(action.dueDate)?.let { !it.isAfter(today.plusDays(1)) } ?: false
         }.take(5).forEach { action ->
             val open = PendingIntent.getActivity(
