@@ -38,6 +38,7 @@ interface TanuDao {
     @Query("UPDATE chunks SET status='FAILED' WHERE meetingId=:meetingId AND status IN ('PENDING','PROCESSING')") suspend fun failUnfinishedChunks(meetingId:String)
 
     @Insert(onConflict=OnConflictStrategy.REPLACE) suspend fun insertSegment(v:TranscriptSegmentEntity)
+    @Query("DELETE FROM transcript_segments WHERE meetingId=:meetingId AND chunkIndex=:chunkIndex") suspend fun deleteSegmentsForChunk(meetingId:String,chunkIndex:Int)
     @Query("SELECT * FROM transcript_segments WHERE meetingId=:meetingId ORDER BY startMs,id") fun observeSegments(meetingId:String):Flow<List<TranscriptSegmentEntity>>
     @Query("SELECT * FROM transcript_segments WHERE meetingId=:meetingId ORDER BY startMs,id") suspend fun segments(meetingId:String):List<TranscriptSegmentEntity>
 
