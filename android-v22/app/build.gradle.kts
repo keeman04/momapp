@@ -14,14 +14,20 @@ android {
         applicationId = "com.tanu.personal"
         minSdk = 30
         targetSdk = 36
-        versionCode = 22
-        versionName = "2.2"
+        versionCode = 23
+        versionName = "2.2.1"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         ndk { abiFilters += listOf("arm64-v8a") }
         externalNativeBuild {
             cmake {
                 cppFlags += "-std=c++17 -O3"
-                arguments += listOf("-DANDROID_STL=c++_shared", "-DWHISPER_BUILD_TESTS=OFF", "-DWHISPER_BUILD_EXAMPLES=OFF", "-DGGML_NATIVE=OFF", "-DGGML_OPENMP=OFF")
+                arguments += listOf(
+                    "-DANDROID_STL=c++_shared",
+                    "-DWHISPER_BUILD_TESTS=OFF",
+                    "-DWHISPER_BUILD_EXAMPLES=OFF",
+                    "-DGGML_NATIVE=OFF",
+                    "-DGGML_OPENMP=OFF"
+                )
             }
         }
     }
@@ -29,7 +35,10 @@ android {
     buildFeatures { compose = true; buildConfig = true }
     externalNativeBuild { cmake { path = file("src/main/cpp/CMakeLists.txt"); version = "3.22.1" } }
     androidResources { noCompress += listOf("bin", "gguf") }
-    compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
     packaging { resources.excludes += setOf("META-INF/AL2.0", "META-INF/LGPL2.1") }
 }
 
@@ -38,21 +47,18 @@ kapt { correctErrorTypes = true }
 dependencies {
     val composeBom = platform("androidx.compose:compose-bom:2026.02.01")
     implementation(composeBom)
-    androidTestImplementation(composeBom)
 
     implementation(project(":llamaLib"))
 
     implementation("androidx.core:core-ktx:1.17.0")
     implementation("androidx.activity:activity-compose:1.12.0")
     implementation("androidx.compose.ui:ui")
-    implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.material:material-icons-extended")
     implementation("androidx.navigation:navigation-compose:2.9.8")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.10.0")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.10.0")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.10.0")
-    implementation("androidx.lifecycle:lifecycle-service:2.10.0")
 
     implementation("androidx.room:room-runtime:2.8.1")
     implementation("androidx.room:room-ktx:2.8.1")
@@ -65,7 +71,6 @@ dependencies {
     implementation("com.google.dagger:hilt-android:2.60.1")
     kapt("com.google.dagger:hilt-compiler:2.60.1")
     implementation("androidx.hilt:hilt-navigation-compose:1.2.0")
-    implementation("androidx.datastore:datastore-preferences:1.1.7")
 
-    debugImplementation("androidx.compose.ui:ui-tooling")
+    testImplementation("junit:junit:4.13.2")
 }
