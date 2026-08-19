@@ -28,6 +28,22 @@ jobs:
       - name: Checkout hardened TANU
         uses: actions/checkout@v4
 
+      - name: Repository cleanup audit
+        run: |
+          test ! -e android-v22/backend
+          test ! -e android-v22/.materialized
+          test ! -e ci
+          test ! -e preview
+          test ! -e source
+          test ! -e v2bundle
+          test ! -e .github/workflows/build-apk.yml
+          test ! -e .github/workflows/build-v2-fast.yml
+          test ! -e .github/workflows/build-v22.yml
+          test ! -e .github/workflows/materialize-v22.yml
+          test -f .github/workflows/build-v221-hardening.yml
+          test -f android-v22/app/src/main/res/drawable-nodpi/tanu_app_icon.webp
+          test ! -e android-v22/app/src/main/res/drawable-nodpi/tanu_brand_lockup.jpg
+
       - name: Set up Java 17
         uses: actions/setup-java@v4
         with:
