@@ -81,6 +81,16 @@ jobs:
           grep -q 'private fun MeetingDetailScreen' app/src/main/java/com/tanu/personal/MainActivity.kt
           grep -q 'content: @Composable () -> Unit' app/src/main/java/com/tanu/personal/ui/TanuTheme.kt
 
+      - name: Apply Compose UI compatibility fixes
+        run: |
+          echo "060bb55d0fd4bcf1742e7a23ec7bfa76b5f724f60aabed1937afa48f2e398987  v2bundle/uifix.b64" | sha256sum -c -
+          base64 -d v2bundle/uifix.b64 | gzip -d > /tmp/tanu_v2_uifix.patch
+          echo "8e73aff3088f9a93876d7b7183ea90aea8d89f855fbdf140940fb3472968968a  /tmp/tanu_v2_uifix.patch" | sha256sum -c -
+          cd /tmp/tanu_personal_v2
+          patch -p1 < /tmp/tanu_v2_uifix.patch
+          grep -q 'import android.widget.Toast' app/src/main/java/com/tanu/personal/MainActivity.kt
+          grep -q 'fontSize=24.sp' app/src/main/java/com/tanu/personal/MainActivity.kt
+
       - name: Pin production API 36 Jetpack stack
         run: |
           cd /tmp/tanu_personal_v2
