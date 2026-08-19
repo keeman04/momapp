@@ -1,12 +1,15 @@
 package com.tanu.personal.service
 
+import android.Manifest
 import android.app.*
 import android.content.*
+import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
 import android.media.*
 import android.media.audiofx.*
 import android.os.*
 import androidx.core.app.NotificationCompat
+import androidx.core.content.ContextCompat
 import com.tanu.personal.MainActivity
 import com.tanu.personal.audio.*
 import com.tanu.personal.data.MeetingRepository
@@ -106,6 +109,10 @@ class RecordingService : Service() {
         activeMeetingId = id
 
         try {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+                throw SecurityException("Microphone permission is required to record a meeting")
+            }
+
             val min = AudioRecord.getMinBufferSize(
                 16000,
                 AudioFormat.CHANNEL_IN_MONO,
