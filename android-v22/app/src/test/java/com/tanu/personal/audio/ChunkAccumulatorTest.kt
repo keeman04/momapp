@@ -46,6 +46,34 @@ class ChunkAccumulatorTest {
         dir.deleteRecursively()
     }
 
+    @Test
+    fun fourHourStreamKeepsMonotonicBoundedChunks() {
+        val dir = Files.createTempDirectory("tanu-long-meeting-test").toFile()
+        val sampleRate = 10
+        val acc = ChunkAccumulator(dir, "long", seconds = 20, overlapSeconds = 1, sampleRate = sampleRate)
+        val input = ByteArray(4 * 60 * 60 * sampleRate * 2)
+        val emitted = mutableListOf<ChunkAccumulator.Chunk>()
+        var offset = 0
+        val feedSizes = intArrayOf(17, 53, 211, 409, 997)
+        var feedIndex = 0
+        while (offset < input.size) {
+            val n = minOf(feedSizes[feedIndex++ % feedSizes.size], input.size - offset)
+            emitted += acc.add(input.copyOfRange(offset, offset + n), n)
+            offset += n
+        }
+        acc.flush()?.let(emitted::add)
+
+        assertTrue(emitted.size > 700)
+        assertEquals(emitted.indices.toList(), emitted.map { it.index })
+        emitted.zipWithNext().forEach { (a, b) ->
+            assertEquals(19_000L, b.startMs - a.startMs)
+            assertTrue(b.endMs > b.startMs)
+            assertTrue(b.file.length() <= 20L * sampleRate * 2)
+        }
+        assertTrue(emitted.last().endMs <= 4L * 60L * 60L * 1000L)
+        dir.deleteRecursively()
+    }
+
     @Test(expected = IllegalArgumentException::class)
     fun rejectsInvalidPcmLength() {
         val dir = Files.createTempDirectory("tanu-chunk-test").toFile()
