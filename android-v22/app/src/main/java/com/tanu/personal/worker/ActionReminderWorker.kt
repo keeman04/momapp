@@ -1,17 +1,24 @@
 package com.tanu.personal.worker
 
-import android.app.*
-import android.content.*
+import android.Manifest
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
+import android.content.Context
+import android.content.Intent
+import android.content.pm.PackageManager
 import android.os.Build
 import androidx.core.app.NotificationCompat
+import androidx.core.content.ContextCompat
 import androidx.hilt.work.HiltWorker
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.tanu.personal.MainActivity
 import com.tanu.personal.db.TanuDao
-import com.tanu.personal.receiver.ActionReminderReceiver
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
 
 @HiltWorker
 class ActionReminderWorker @AssistedInject constructor(
@@ -19,41 +26,57 @@ class ActionReminderWorker @AssistedInject constructor(
     @Assisted params: WorkerParameters,
     private val dao: TanuDao
 ) : CoroutineWorker(appContext, params) {
+
     override suspend fun doWork(): Result {
         createChannel()
-        dao.openActionsList().take(6).forEachIndexed { index, action ->
-            notifyAction(action.id, action.meetingId, action.title, action.owner, action.dueDate, 4100 + index)
+        if (!canNotify()) return Result.success()
+        val today = LocalDate.now()
+        dao.openActionsNow().filter { action ->
+            parseDate(action.dueDate)?.let { !it.isAfter(today.plusDays(1)) } ?: false
+        }.take(5).forEach { action ->
+            val open = PendingIntent.getActivity(
+                applicationContext,
+                action.id.hashCode(),
+                Intent(applicationContext, MainActivity::class.java)
+                    .putExtra("open_meeting_id", action.meetingId),
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+            )
+            val notification = NotificationCompat.Builder(applicationContext, "tanu_actions")
+                .setSmallIcon(android.R.drawable.ic_menu_my_calendar)
+                .setContentTitle("TANU action due")
+                .setContentText(action.title.take(100))
+                .setAutoCancel(true)
+                .setContentIntent(open)
+                .build()
+            (applicationContext.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager)
+                .notify(action.id.hashCode(), notification)
         }
         return Result.success()
     }
 
-    private fun notifyAction(actionId:String, meetingId:String, title:String, owner:String, due:String, notificationId:Int) {
-        val openIntent = Intent(applicationContext, MainActivity::class.java).putExtra("open_meeting_id", meetingId)
-        val open = PendingIntent.getActivity(applicationContext, notificationId, openIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
-        val done = PendingIntent.getBroadcast(applicationContext, notificationId + 100,
-            Intent(applicationContext, ActionReminderReceiver::class.java).setAction(ActionReminderReceiver.DONE).putExtra("actionId", actionId),
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
-        val snooze = PendingIntent.getBroadcast(applicationContext, notificationId + 200,
-            Intent(applicationContext, ActionReminderReceiver::class.java).setAction(ActionReminderReceiver.SNOOZE).putExtra("actionId", actionId).putExtra("meetingId", meetingId).putExtra("title", title).putExtra("owner", owner).putExtra("due", due),
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
-        val detail = buildString { append(owner); if (due.isNotBlank()) append(" · Due ").append(due) }
-        val n = NotificationCompat.Builder(applicationContext, CHANNEL)
-            .setSmallIcon(android.R.drawable.ic_popup_reminder)
-            .setContentTitle("TANU Reminder")
-            .setContentText(title)
-            .setStyle(NotificationCompat.BigTextStyle().bigText("$title\n$detail"))
-            .setContentIntent(open).setAutoCancel(true)
-            .addAction(0, "Done", done).addAction(0, "Snooze", snooze)
-            .build()
-        (applicationContext.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager).notify(actionId.hashCode(), n)
+    private fun canNotify(): Boolean =
+        Build.VERSION.SDK_INT < 33 ||
+            ContextCompat.checkSelfPermission(applicationContext, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+
+    private fun parseDate(raw: String): LocalDate? {
+        if (raw.isBlank()) return null
+        val normalized = raw.trim().lowercase()
+        if (normalized == "today") return LocalDate.now()
+        if (normalized == "tomorrow") return LocalDate.now().plusDays(1)
+        return listOf("yyyy-MM-dd", "dd/MM/yyyy", "dd-MM-yyyy", "d MMM yyyy", "d MMMM yyyy")
+            .firstNotNullOfOrNull { pattern ->
+                runCatching {
+                    LocalDate.parse(raw.trim(), DateTimeFormatter.ofPattern(pattern, java.util.Locale.ENGLISH))
+                }.getOrNull()
+            }
     }
 
     private fun createChannel() {
         if (Build.VERSION.SDK_INT >= 26) {
-            val m = applicationContext.getSystemService(NotificationManager::class.java)
-            m.createNotificationChannel(NotificationChannel(CHANNEL, "Action reminders", NotificationManager.IMPORTANCE_DEFAULT))
+            val manager = applicationContext.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            manager.createNotificationChannel(
+                NotificationChannel("tanu_actions", "TANU action reminders", NotificationManager.IMPORTANCE_DEFAULT)
+            )
         }
     }
-
-    companion object { const val CHANNEL = "tanu_actions" }
 }
