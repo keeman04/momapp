@@ -14,8 +14,8 @@ android {
         applicationId = "com.tanu.personal"
         minSdk = 29
         targetSdk = 36
-        versionCode = 20
-        versionName = "2.0-fast"
+        versionCode = 22
+        versionName = "2.2"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         ndk { abiFilters += listOf("arm64-v8a") }
         externalNativeBuild {
@@ -28,7 +28,7 @@ android {
 
     buildFeatures { compose = true; buildConfig = true }
     externalNativeBuild { cmake { path = file("src/main/cpp/CMakeLists.txt"); version = "3.22.1" } }
-    androidResources { noCompress += "bin" }
+    androidResources { noCompress += listOf("bin", "gguf") }
     compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
     packaging { resources.excludes += setOf("META-INF/AL2.0", "META-INF/LGPL2.1") }
 }
@@ -39,6 +39,8 @@ dependencies {
     val composeBom = platform("androidx.compose:compose-bom:2026.02.01")
     implementation(composeBom)
     androidTestImplementation(composeBom)
+
+    implementation(project(":llamaLib"))
 
     implementation("androidx.core:core-ktx:1.17.0")
     implementation("androidx.activity:activity-compose:1.12.0")
