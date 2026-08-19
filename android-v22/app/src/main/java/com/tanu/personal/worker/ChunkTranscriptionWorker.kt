@@ -36,6 +36,7 @@ class ChunkTranscriptionWorker @AssistedInject constructor(
         dao.updateChunk(id, ChunkStatus.PROCESSING)
 
         if (!PcmSpeechGate.hasLikelySpeech(file)) {
+            dao.deleteSegmentsForChunk(chunk.meetingId, chunk.chunkIndex)
             dao.updateChunk(id, ChunkStatus.DONE, "")
             runCatching { file.delete() }
             return Result.success()
@@ -61,6 +62,9 @@ class ChunkTranscriptionWorker @AssistedInject constructor(
                 if (idx == 0) piece.copy(text = TranscriptOverlap.remove(previous, piece.text)) else piece
             }.filter { it.text.isNotBlank() }
 
+            // A WorkManager retry can happen after some rows were already inserted.
+            // Replace this chunk's rows so retries never duplicate transcript text.
+            dao.deleteSegmentsForChunk(chunk.meetingId, chunk.chunkIndex)
             cleaned.forEach { piece ->
                 dao.insertSegment(
                     TranscriptSegmentEntity(
