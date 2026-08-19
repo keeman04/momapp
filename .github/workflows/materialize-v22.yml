@@ -1,0 +1,102 @@
+name: Materialize TANU v2.2 source
+
+on:
+  push:
+    branches: [ tanu-personal-v2.2 ]
+    paths:
+      - '.github/workflows/materialize-v22.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  materialize:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: tanu-personal-v2.2
+          fetch-depth: 0
+
+      - name: Reconstruct validated v2 source
+        run: |
+          cat \
+            v2bundle/source.b64.00 \
+            v2bundle/source.b64.010 \
+            v2bundle/source.b64.020 \
+            v2bundle/source.b64.030 \
+            v2bundle/source.b64.031 \
+            v2bundle/source.b64.040 \
+            v2bundle/source.b64.041 \
+            v2bundle/source.b64.050 \
+            v2bundle/source.b64.051 \
+            v2bundle/source.b64.060 \
+            v2bundle/source.b64.061 \
+            v2bundle/source.b64.070 \
+            v2bundle/source.b64.071 \
+            v2bundle/source.b64.080 \
+            v2bundle/source.b64.081 \
+            v2bundle/source.b64.09 \
+            > /tmp/tanu_v2.b64
+          echo "2fd2357218fb4a17021a467eab670319d4ccc1cac83fb27be931564e1169ceb9  /tmp/tanu_v2.b64" | sha256sum -c -
+          base64 -d /tmp/tanu_v2.b64 > /tmp/tanu_v2.tgz
+          echo "76c8924956a10fdab55ed930b303373367a2c3aa4ca56981f3ad53d4b31a3e95  /tmp/tanu_v2.tgz" | sha256sum -c -
+          rm -rf /tmp/tanu_personal_v2
+          tar -xzf /tmp/tanu_v2.tgz -C /tmp
+
+      - name: Apply validated v2 patches
+        run: |
+          cat v2bundle/hotfix.b64.* > /tmp/hotfix.b64
+          base64 -d /tmp/hotfix.b64 | gzip -d > /tmp/hotfix.patch
+          cd /tmp/tanu_personal_v2
+          patch -p1 < /tmp/hotfix.patch
+          cd "$GITHUB_WORKSPACE"
+          base64 -d v2bundle/compilefix.b64 | gzip -d > /tmp/compilefix.patch
+          cd /tmp/tanu_personal_v2
+          patch -p1 < /tmp/compilefix.patch
+          cd "$GITHUB_WORKSPACE"
+          base64 -d v2bundle/uifix.b64 | gzip -d > /tmp/uifix.patch
+          cd /tmp/tanu_personal_v2
+          patch -p1 < /tmp/uifix.patch
+
+      - name: Normalize production API 36 build files
+        run: |
+          cd /tmp/tanu_personal_v2
+          sed -i 's/compileSdk = 37/compileSdk = 36/' app/build.gradle.kts
+          sed -i 's/compose-bom:2026.06.01/compose-bom:2026.02.01/' app/build.gradle.kts
+          sed -i 's/core-ktx:1.18.0/core-ktx:1.17.0/' app/build.gradle.kts
+          sed -i 's/activity-compose:1.13.0/activity-compose:1.12.0/' app/build.gradle.kts
+          sed -i 's/lifecycle-runtime-ktx:2.11.0/lifecycle-runtime-ktx:2.10.0/' app/build.gradle.kts
+          sed -i 's/lifecycle-runtime-compose:2.11.0/lifecycle-runtime-compose:2.10.0/' app/build.gradle.kts
+          sed -i 's/lifecycle-viewmodel-compose:2.11.0/lifecycle-viewmodel-compose:2.10.0/' app/build.gradle.kts
+          sed -i 's/lifecycle-service:2.11.0/lifecycle-service:2.10.0/' app/build.gradle.kts
+          sed -i 's/room-runtime:2.8.4/room-runtime:2.8.1/' app/build.gradle.kts
+          sed -i 's/room-ktx:2.8.4/room-ktx:2.8.1/' app/build.gradle.kts
+          sed -i 's/room-compiler:2.8.4/room-compiler:2.8.1/' app/build.gradle.kts
+          sed -i 's/work-runtime-ktx:2.11.2/work-runtime-ktx:2.10.5/' app/build.gradle.kts
+          sed -i 's/androidx.hilt:hilt-work:1.4.0/androidx.hilt:hilt-work:1.2.0/' app/build.gradle.kts
+          sed -i 's/androidx.hilt:hilt-compiler:1.4.0/androidx.hilt:hilt-compiler:1.2.0/' app/build.gradle.kts
+          sed -i 's/androidx.hilt:hilt-navigation-compose:1.4.0/androidx.hilt:hilt-navigation-compose:1.2.0/' app/build.gradle.kts
+          sed -i 's/datastore-preferences:1.2.1/datastore-preferences:1.1.7/' app/build.gradle.kts
+          sed -i '/id("org.jetbrains.kotlin.android") version/d' build.gradle.kts
+          sed -i '/id("org.jetbrains.kotlin.kapt") version/d' build.gradle.kts
+          sed -i '/id("com.android.application") version "9.3.0" apply false/a\    id("com.android.legacy-kapt") version "9.3.0" apply false' build.gradle.kts
+          sed -i '/id("org.jetbrains.kotlin.android")/d' app/build.gradle.kts
+          sed -i '/id("org.jetbrains.kotlin.kapt")/d' app/build.gradle.kts
+          sed -i '/id("com.android.application")/a\    id("com.android.legacy-kapt")' app/build.gradle.kts
+          sed -i '/kotlinOptions { jvmTarget = "17" }/d' app/build.gradle.kts
+
+      - name: Commit editable source tree
+        run: |
+          rm -rf android-v22
+          mkdir -p android-v22
+          cp -a /tmp/tanu_personal_v2/. android-v22/
+          rm -rf android-v22/.gradle android-v22/app/build android-v22/build
+          printf 'TANU Personal v2.2 editable source\n' > android-v22/.materialized
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add android-v22
+          git commit -m 'Materialize TANU Personal v2.2 Android source'
+          git push origin HEAD:tanu-personal-v2.2
