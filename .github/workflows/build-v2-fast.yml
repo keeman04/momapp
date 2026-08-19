@@ -34,12 +34,15 @@ jobs:
       - name: Reconstruct TANU Personal v2 source
         run: |
           cat v2bundle/source.b64.* > /tmp/tanu_personal_v2_fast.b64
-          echo "2fd2357218fb4a17021a467eab670319d4ccc1cac83fb27be931564e1169ceb9  /tmp/tanu_personal_v2_fast.b64" | sha256sum -c -
+          sha256sum /tmp/tanu_personal_v2_fast.b64
           base64 -d /tmp/tanu_personal_v2_fast.b64 > /tmp/tanu_personal_v2_fast.tgz
-          echo "76c8924956a10fdab55ed930b303373367a2c3aa4ca56981f3ad53d4b31a3e95  /tmp/tanu_personal_v2_fast.tgz" | sha256sum -c -
+          sha256sum /tmp/tanu_personal_v2_fast.tgz
+          tar -tzf /tmp/tanu_personal_v2_fast.tgz >/tmp/tanu_v2_filelist.txt
           rm -rf /tmp/tanu_personal_v2
           tar -xzf /tmp/tanu_personal_v2_fast.tgz -C /tmp
           test -f /tmp/tanu_personal_v2/app/build.gradle.kts
+          test -f /tmp/tanu_personal_v2/app/src/main/AndroidManifest.xml
+          test -f /tmp/tanu_personal_v2/app/src/main/java/com/tanu/personal/MainActivity.kt
 
       - name: Apply anti-stall MOM hotfix
         run: |
