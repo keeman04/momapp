@@ -12,7 +12,7 @@ android {
 
     defaultConfig {
         applicationId = "com.tanu.personal"
-        minSdk = 29
+        minSdk = 30
         targetSdk = 36
         versionCode = 22
         versionName = "2.2"
