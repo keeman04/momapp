@@ -70,13 +70,16 @@ jobs:
           cd /tmp/tanu_personal_v2
           patch -p1 < /tmp/tanu_v2_stuck_fix.patch
 
-      - name: Normalize Android API target
+      - name: Normalize Android API target and AGP compatibility
         run: |
           cd /tmp/tanu_personal_v2
           sed -i 's/compileSdk[[:space:]]*=[[:space:]]*37/compileSdk = 36/' app/build.gradle.kts
+          printf '\nandroid.builtInKotlin=false\nandroid.newDsl=false\n' >> gradle.properties
           grep -Eq 'compileSdk[[:space:]]*=[[:space:]]*36' app/build.gradle.kts
           grep -Eq 'targetSdk[[:space:]]*=[[:space:]]*36' app/build.gradle.kts
           grep -Eq 'ndkVersion[[:space:]]*=[[:space:]]*"28\.2\.13676358"' app/build.gradle.kts
+          grep -q 'android.builtInKotlin=false' gradle.properties
+          grep -q 'android.newDsl=false' gradle.properties
 
       - name: Validate non-stalling production rules
         run: |
