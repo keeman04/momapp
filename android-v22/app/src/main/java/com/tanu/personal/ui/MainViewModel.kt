@@ -75,8 +75,8 @@ class MainViewModel @Inject constructor(
 
     fun doneAction(id: String, done: Boolean) = viewModelScope.launch { repo.setActionDone(id, done) }
     fun deleteMeeting(id: String) = viewModelScope.launch { repo.deleteMeeting(id) }
-    fun saveParticipant(name: String, company: String, phone: String) =
-        viewModelScope.launch { repo.saveParticipant(name, company, phone) }
+    fun saveParticipant(name: String, whatsapp: String, email: String = "", company: String = "") =
+        viewModelScope.launch { repo.saveParticipant(name, whatsapp, email, company) }
 
     fun updateMeta(id: String, title: String, participants: String) =
         viewModelScope.launch { dao.updateMeetingMeta(id, title, participants) }
