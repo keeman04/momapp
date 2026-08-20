@@ -1,6 +1,7 @@
 package com.tanu.personal
 
 import android.Manifest
+import android.app.Activity
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
@@ -8,6 +9,7 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.provider.ContactsContract
 import android.provider.Settings
 import android.view.WindowManager
 import android.widget.Toast
@@ -18,6 +20,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -104,6 +107,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -120,6 +124,7 @@ import com.tanu.personal.data.AiMode
 import com.tanu.personal.data.MeetingEntity
 import com.tanu.personal.data.MeetingStatus
 import com.tanu.personal.data.MomEntity
+import com.tanu.personal.data.ParticipantRules
 import com.tanu.personal.service.RecordingService
 import com.tanu.personal.ui.MainViewModel
 import com.tanu.personal.ui.TanuBlue
@@ -488,36 +493,188 @@ private fun EmptyCard(title: String, subtitle: String) {
 }
 
 @Composable
+private fun ParticipantEntryDialog(
+    onDismiss: () -> Unit,
+    onSave: (name: String, whatsapp: String, email: String, company: String) -> Unit
+) {
+    val context = LocalContext.current
+    var name by remember { mutableStateOf("") }
+    var whatsapp by remember { mutableStateOf("") }
+    var email by remember { mutableStateOf("") }
+    var company by remember { mutableStateOf("") }
+    var attempted by remember { mutableStateOf(false) }
+
+    val contactLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            val uri = result.data?.data ?: return@rememberLauncherForActivityResult
+            val projection = arrayOf(
+                ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME,
+                ContactsContract.CommonDataKinds.Phone.NUMBER
+            )
+            context.contentResolver.query(uri, projection, null, null, null)?.use { cursor ->
+                if (cursor.moveToFirst()) {
+                    val nameIndex = cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME)
+                    val numberIndex = cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.NUMBER)
+                    if (nameIndex >= 0) name = cursor.getString(nameIndex).orEmpty()
+                    if (numberIndex >= 0) whatsapp = cursor.getString(numberIndex).orEmpty()
+                }
+            }
+        }
+    }
+
+    val canSave = ParticipantRules.canSave(name, whatsapp, email)
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Add participant") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(
+                    onClick = {
+                        contactLauncher.launch(
+                            Intent(Intent.ACTION_PICK).apply {
+                                type = ContactsContract.CommonDataKinds.Phone.CONTENT_TYPE
+                            }
+                        )
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(Icons.Default.PersonAdd, null)
+                    Spacer(Modifier.width(6.dp))
+                    Text("Choose from Contacts")
+                }
+                Text(
+                    "Name and WhatsApp/mobile number are required. Email is optional.",
+                    fontSize = 12.sp,
+                    color = Color.Gray
+                )
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    label = { Text("Name *") },
+                    isError = attempted && name.trim().isBlank(),
+                    modifier = Modifier.fillMaxWidth()
+                )
+                OutlinedTextField(
+                    value = whatsapp,
+                    onValueChange = { whatsapp = it },
+                    label = { Text("WhatsApp / mobile number *") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+                    isError = attempted && !ParticipantRules.isValidWhatsapp(whatsapp),
+                    supportingText = {
+                        if (attempted && !ParticipantRules.isValidWhatsapp(whatsapp)) {
+                            Text("Enter a valid phone number with country code where possible.")
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                )
+                OutlinedTextField(
+                    value = email,
+                    onValueChange = { email = it },
+                    label = { Text("Email (optional)") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+                    isError = attempted && !ParticipantRules.isValidEmail(email),
+                    modifier = Modifier.fillMaxWidth()
+                )
+                OutlinedTextField(
+                    value = company,
+                    onValueChange = { company = it },
+                    label = { Text("Company (optional)") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        },
+        confirmButton = {
+            Button(onClick = {
+                attempted = true
+                if (canSave) {
+                    onSave(
+                        name.trim(),
+                        ParticipantRules.normalizeWhatsapp(whatsapp),
+                        email.trim(),
+                        company.trim()
+                    )
+                }
+            }) { Text("Save participant") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
+    )
+}
+
+@Composable
 private fun NewMeetingScreen(vm: MainViewModel, onBack: () -> Unit, onStarted: (String) -> Unit) {
+    val savedPeople by vm.participants.collectAsStateWithLifecycle()
     var title by remember { mutableStateOf("") }
-    var people by remember { mutableStateOf("") }
-    Column(
+    var selectedPeople by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
+    var addPerson by remember { mutableStateOf(false) }
+
+    if (addPerson) {
+        ParticipantEntryDialog(
+            onDismiss = { addPerson = false },
+            onSave = { name, whatsapp, email, company ->
+                vm.saveParticipant(name, whatsapp, email, company)
+                selectedPeople = selectedPeople + (whatsapp to name)
+                addPerson = false
+            }
+        )
+    }
+
+    LazyColumn(
         Modifier.fillMaxSize().padding(20.dp).imePadding(),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        TopBack("New Meeting", onBack)
-        OutlinedTextField(
-            value = title,
-            onValueChange = { title = it },
-            label = { Text("Meeting title") },
-            placeholder = { Text("e.g. Weekly review") },
-            modifier = Modifier.fillMaxWidth()
-        )
-        OutlinedTextField(
-            value = people,
-            onValueChange = { people = it },
-            label = { Text("Participants / guests") },
-            supportingText = { Text("Separate names with commas. Guests do not need TANU accounts.") },
-            modifier = Modifier.fillMaxWidth()
-        )
-        Spacer(Modifier.weight(1f))
-        Button(
-            onClick = { vm.startMeeting(title, people, onStarted = onStarted) },
-            modifier = Modifier.fillMaxWidth().height(58.dp)
-        ) {
-            Icon(Icons.Default.Mic, null)
-            Spacer(Modifier.width(8.dp))
-            Text("Start Meeting")
+        item { TopBack("New Meeting", onBack) }
+        item {
+            OutlinedTextField(
+                value = title,
+                onValueChange = { title = it },
+                label = { Text("Meeting title") },
+                placeholder = { Text("e.g. Weekly review") },
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
+        item { SectionTitle("Participants") }
+        if (savedPeople.isEmpty()) {
+            item { EmptyCard("No saved participants", "Add a participant from Contacts. Name and WhatsApp/mobile number are required.") }
+        } else {
+            items(savedPeople, key = { it.id }) { person ->
+                val key = person.whatsapp.ifBlank { person.phone }
+                val selected = selectedPeople.containsKey(key)
+                Card(Modifier.fillMaxWidth().clickable {
+                    selectedPeople = if (selected) selectedPeople - key else selectedPeople + (key to person.name)
+                }) {
+                    Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(
+                            checked = selected,
+                            onCheckedChange = {
+                                selectedPeople = if (selected) selectedPeople - key else selectedPeople + (key to person.name)
+                            }
+                        )
+                        Column(Modifier.weight(1f)) {
+                            Text(person.name, fontWeight = FontWeight.SemiBold)
+                            Text(key, fontSize = 11.sp, color = Color.Gray)
+                        }
+                    }
+                }
+            }
+        }
+        item {
+            OutlinedButton(onClick = { addPerson = true }, modifier = Modifier.fillMaxWidth()) {
+                Icon(Icons.Default.PersonAdd, null)
+                Spacer(Modifier.width(8.dp))
+                Text("Add participant from Contacts")
+            }
+        }
+        item {
+            Button(
+                onClick = {
+                    vm.startMeeting(title, selectedPeople.values.distinct().joinToString(", "), onStarted = onStarted)
+                },
+                modifier = Modifier.fillMaxWidth().height(58.dp)
+            ) {
+                Icon(Icons.Default.Mic, null)
+                Spacer(Modifier.width(8.dp))
+                Text("Start Meeting")
+            }
         }
     }
 }
@@ -525,11 +682,21 @@ private fun NewMeetingScreen(vm: MainViewModel, onBack: () -> Unit, onStarted: (
 @Composable
 private fun RecordingScreen(vm: MainViewModel, onStopped: (String) -> Unit) {
     val meeting by vm.meeting.collectAsStateWithLifecycle()
+    val savedPeople by vm.participants.collectAsStateWithLifecycle()
     val context = LocalContext.current
     var elapsed by remember { mutableLongStateOf(0) }
     var paused by remember { mutableStateOf(RecordingService.isPaused) }
     var addPerson by remember { mutableStateOf(false) }
-    var person by remember { mutableStateOf("") }
+    var addNewPerson by remember { mutableStateOf(false) }
+
+    fun attachParticipant(name: String) {
+        val existing = meeting?.participantsCsv.orEmpty()
+            .split(',')
+            .map { it.trim() }
+            .filter { it.isNotBlank() }
+        val updated = (existing + name.trim()).distinct().joinToString(", ")
+        meeting?.let { vm.updateMeta(it.id, it.title, updated) }
+    }
 
     DisposableEffect(Unit) {
         (context as? ComponentActivity)?.window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
@@ -549,18 +716,52 @@ private fun RecordingScreen(vm: MainViewModel, onStopped: (String) -> Unit) {
             onDismissRequest = { addPerson = false },
             title = { Text("Add participant") },
             text = {
-                OutlinedTextField(person, { person = it }, label = { Text("Name") }, modifier = Modifier.fillMaxWidth())
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    if (savedPeople.isEmpty()) {
+                        Text("No saved participants yet.", color = Color.Gray)
+                    } else {
+                        savedPeople.take(8).forEach { person ->
+                            TextButton(
+                                onClick = {
+                                    attachParticipant(person.name)
+                                    addPerson = false
+                                },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Column(Modifier.fillMaxWidth()) {
+                                    Text(person.name, fontWeight = FontWeight.SemiBold)
+                                    Text(
+                                        person.whatsapp.ifBlank { person.phone },
+                                        fontSize = 11.sp,
+                                        color = Color.Gray
+                                    )
+                                }
+                            }
+                        }
+                    }
+                    OutlinedButton(
+                        onClick = { addPerson = false; addNewPerson = true },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(Icons.Default.PersonAdd, null)
+                        Spacer(Modifier.width(6.dp))
+                        Text("New participant from Contacts")
+                    }
+                }
             },
-            confirmButton = {
-                Button(onClick = {
-                    val current = meeting?.participantsCsv.orEmpty().trim()
-                    val updated = listOf(current, person.trim()).filter { it.isNotBlank() }.joinToString(", ")
-                    meeting?.let { vm.updateMeta(it.id, it.title, updated) }
-                    person = ""
-                    addPerson = false
-                }) { Text("Add") }
-            },
+            confirmButton = { },
             dismissButton = { TextButton(onClick = { addPerson = false }) { Text("Cancel") } }
+        )
+    }
+
+    if (addNewPerson) {
+        ParticipantEntryDialog(
+            onDismiss = { addNewPerson = false },
+            onSave = { name, whatsapp, email, company ->
+                vm.saveParticipant(name, whatsapp, email, company)
+                attachParticipant(name)
+                addNewPerson = false
+            }
         )
     }
 
@@ -936,9 +1137,18 @@ private fun ActionsScreen(vm: MainViewModel) {
 @Composable
 private fun PeopleScreen(vm: MainViewModel) {
     val people by vm.participants.collectAsStateWithLifecycle()
-    var name by remember { mutableStateOf("") }
-    var company by remember { mutableStateOf("") }
-    var phone by remember { mutableStateOf("") }
+    var addPerson by remember { mutableStateOf(false) }
+
+    if (addPerson) {
+        ParticipantEntryDialog(
+            onDismiss = { addPerson = false },
+            onSave = { name, whatsapp, email, company ->
+                vm.saveParticipant(name, whatsapp, email, company)
+                addPerson = false
+            }
+        )
+    }
+
     LazyColumn(
         Modifier.fillMaxSize().padding(18.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)
@@ -947,30 +1157,32 @@ private fun PeopleScreen(vm: MainViewModel) {
         item {
             Card {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Save a participant", fontWeight = FontWeight.Bold)
-                    OutlinedTextField(name, { name = it }, label = { Text("Name") }, modifier = Modifier.fillMaxWidth())
-                    OutlinedTextField(company, { company = it }, label = { Text("Company (optional)") }, modifier = Modifier.fillMaxWidth())
-                    OutlinedTextField(phone, { phone = it }, label = { Text("Phone (optional)") }, modifier = Modifier.fillMaxWidth())
-                    Button(
-                        onClick = {
-                            if (name.isNotBlank()) {
-                                vm.saveParticipant(name.trim(), company.trim(), phone.trim())
-                                name = ""; company = ""; phone = ""
-                            }
-                        }
-                    ) {
-                        Icon(Icons.Default.Add, null); Spacer(Modifier.width(5.dp)); Text("Save")
+                    Text("Participants", fontWeight = FontWeight.Bold)
+                    Text(
+                        "Every participant must have a name and WhatsApp/mobile number. Email is optional.",
+                        fontSize = 12.sp,
+                        color = Color.Gray
+                    )
+                    Button(onClick = { addPerson = true }, modifier = Modifier.fillMaxWidth()) {
+                        Icon(Icons.Default.Add, null)
+                        Spacer(Modifier.width(6.dp))
+                        Text("Add participant")
                     }
                 }
             }
         }
-        if (people.isEmpty()) item { EmptyCard("No saved people", "Guests can still be typed directly when starting a meeting.") }
-        else items(people) { person ->
-            Card {
-                Column(Modifier.padding(14.dp)) {
-                    Text(person.name, fontWeight = FontWeight.SemiBold)
-                    val detail = listOf(person.company, person.phone).filter { it.isNotBlank() }.joinToString(" · ")
-                    if (detail.isNotBlank()) Text(detail, fontSize = 12.sp, color = Color.Gray)
+        if (people.isEmpty()) {
+            item { EmptyCard("No saved people", "Choose a person from Contacts or enter their details manually.") }
+        } else {
+            items(people) { person ->
+                Card {
+                    Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                        Text(person.name, fontWeight = FontWeight.SemiBold)
+                        val whatsapp = person.whatsapp.ifBlank { person.phone }
+                        Text("WhatsApp: $whatsapp", fontSize = 12.sp, color = Color.Gray)
+                        if (person.email.isNotBlank()) Text("Email: ${person.email}", fontSize = 12.sp, color = Color.Gray)
+                        if (person.company.isNotBlank()) Text(person.company, fontSize = 12.sp, color = Color.Gray)
+                    }
                 }
             }
         }
@@ -1110,7 +1322,7 @@ private fun SettingsScreen(vm: MainViewModel, onOverlayPermission: () -> Unit) {
 
         item {
             Text(
-                "TANU Personal v2.2",
+                "TANU Personal v3.0.0",
                 fontSize = 12.sp,
                 color = Color.Gray,
                 modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp)

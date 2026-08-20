@@ -7,5 +7,3 @@ dependencyResolutionManagement {
 }
 rootProject.name = "TANUPersonal"
 include(":app")
-include(":llamaLib")
-project(":llamaLib").projectDir = file("llama-lib")

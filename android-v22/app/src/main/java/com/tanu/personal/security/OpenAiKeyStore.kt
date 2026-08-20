@@ -4,6 +4,7 @@ import android.content.Context
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.util.Base64
+import com.tanu.personal.BuildConfig
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.security.KeyStore
 import javax.crypto.Cipher
@@ -18,6 +19,11 @@ class OpenAiKeyStore @Inject constructor(@ApplicationContext private val context
     private val prefs = context.getSharedPreferences("tanu_openai_secure", Context.MODE_PRIVATE)
     private val alias = "tanu_openai_key_v1"
     private val valueKey = "openai_api_key"
+    private val preloadDoneKey = "preinstalled_openai_key_bootstrapped_v1"
+
+    init {
+        bootstrapPreinstalledKey()
+    }
 
     fun save(apiKey: String) {
         val value = apiKey.trim()
@@ -51,6 +57,20 @@ class OpenAiKeyStore @Inject constructor(@ApplicationContext private val context
 
     fun clear() {
         prefs.edit().remove(valueKey).apply()
+    }
+
+    private fun bootstrapPreinstalledKey() {
+        val bundled = BuildConfig.PREINSTALLED_OPENAI_API_KEY.trim()
+        if (bundled.isBlank() || prefs.getBoolean(preloadDoneKey, false)) return
+
+        val bootstrapped = runCatching {
+            if (!hasKey()) save(bundled)
+            true
+        }.getOrDefault(false)
+
+        if (bootstrapped) {
+            prefs.edit().putBoolean(preloadDoneKey, true).apply()
+        }
     }
 
     private fun key(): SecretKey {

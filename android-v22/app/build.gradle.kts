@@ -5,6 +5,13 @@ plugins {
     id("com.google.dagger.hilt.android")
 }
 
+val preinstalledOpenAiKey = providers.environmentVariable("OPENAI_API_KEY").orNull.orEmpty()
+val escapedPreinstalledOpenAiKey = preinstalledOpenAiKey
+    .replace("\\", "\\\\")
+    .replace("\"", "\\\"")
+    .replace("\n", "\\n")
+    .replace("\r", "\\r")
+
 android {
     namespace = "com.tanu.personal"
     compileSdk = 36
@@ -14,9 +21,10 @@ android {
         applicationId = "com.tanu.personal"
         minSdk = 30
         targetSdk = 36
-        versionCode = 23
-        versionName = "2.2.1"
+        versionCode = 30
+        versionName = "3.0.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        buildConfigField("String", "PREINSTALLED_OPENAI_API_KEY", "\"$escapedPreinstalledOpenAiKey\"")
         ndk { abiFilters += listOf("arm64-v8a") }
         externalNativeBuild {
             cmake {
@@ -34,7 +42,7 @@ android {
 
     buildFeatures { compose = true; buildConfig = true }
     externalNativeBuild { cmake { path = file("src/main/cpp/CMakeLists.txt"); version = "3.22.1" } }
-    androidResources { noCompress += listOf("bin", "gguf") }
+    androidResources { noCompress += listOf("bin") }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
@@ -47,8 +55,6 @@ kapt { correctErrorTypes = true }
 dependencies {
     val composeBom = platform("androidx.compose:compose-bom:2026.02.01")
     implementation(composeBom)
-
-    implementation(project(":llamaLib"))
 
     implementation("androidx.core:core-ktx:1.17.0")
     implementation("androidx.activity:activity-compose:1.12.0")
