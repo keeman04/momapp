@@ -5,6 +5,13 @@ plugins {
     id("com.google.dagger.hilt.android")
 }
 
+val preinstalledOpenAiKey = providers.environmentVariable("OPENAI_API_KEY").orNull.orEmpty()
+val escapedPreinstalledOpenAiKey = preinstalledOpenAiKey
+    .replace("\\", "\\\\")
+    .replace("\"", "\\\"")
+    .replace("\n", "\\n")
+    .replace("\r", "\\r")
+
 android {
     namespace = "com.tanu.personal"
     compileSdk = 36
@@ -17,6 +24,7 @@ android {
         versionCode = 30
         versionName = "3.0.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        buildConfigField("String", "PREINSTALLED_OPENAI_API_KEY", "\"$escapedPreinstalledOpenAiKey\"")
         ndk { abiFilters += listOf("arm64-v8a") }
         externalNativeBuild {
             cmake {
