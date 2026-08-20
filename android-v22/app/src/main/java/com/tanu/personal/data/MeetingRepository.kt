@@ -139,13 +139,22 @@ class MeetingRepository @Inject constructor(
             ?.forEach { runCatching { it.delete() } }
     }
 
-    suspend fun saveParticipant(name: String, company: String = "", phone: String = "") {
+    suspend fun saveParticipant(
+        name: String,
+        whatsapp: String,
+        email: String = "",
+        company: String = ""
+    ) {
+        if (!ParticipantRules.canSave(name, whatsapp, email)) return
+        val normalized = ParticipantRules.normalizeWhatsapp(whatsapp)
         dao.upsertParticipant(
             ParticipantEntity(
-                UUID.randomUUID().toString(),
-                name = name,
-                company = company,
-                phone = phone,
+                id = UUID.randomUUID().toString(),
+                name = name.trim(),
+                company = company.trim(),
+                phone = normalized,
+                email = email.trim(),
+                whatsapp = normalized,
                 isGuest = true
             )
         )
