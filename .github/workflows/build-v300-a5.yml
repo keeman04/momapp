@@ -20,6 +20,7 @@ jobs:
       contents: read
     env:
       GRADLE_OPTS: -Dorg.gradle.jvmargs=-Xmx4g -Dfile.encoding=UTF-8
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
 
     steps:
       - name: Checkout TANU v3 A5
@@ -61,12 +62,22 @@ jobs:
           test "$(find app/src/main/assets/models -maxdepth 1 -type f | wc -l)" -eq 1
           test ! -e app/src/main/assets/models/Qwen3-0.6B-Q4_K_M.gguf
 
+      - name: Check personal OpenAI preload
+        run: |
+          if [ -n "${OPENAI_API_KEY:-}" ]; then
+            echo "Personal OpenAI preload: enabled"
+          else
+            echo "::warning::OPENAI_API_KEY repository secret is not configured; APK will use manual key entry."
+          fi
+
       - name: Verify Redmi A5 lightweight source
         run: |
           cd android-v22
           grep -q 'versionName = "3.0.0"' app/build.gradle.kts
           grep -q 'versionCode = 30' app/build.gradle.kts
           grep -q 'minSdk = 30' app/build.gradle.kts
+          grep -q 'PREINSTALLED_OPENAI_API_KEY' app/build.gradle.kts
+          grep -q 'bootstrapPreinstalledKey' app/src/main/java/com/tanu/personal/security/OpenAiKeyStore.kt
           ! grep -q 'project(":llamaLib")' app/build.gradle.kts
           ! grep -q 'include(":llamaLib")' settings.gradle.kts
           test ! -e app/src/main/java/com/tanu/personal/ai/LocalLlmProvider.kt
